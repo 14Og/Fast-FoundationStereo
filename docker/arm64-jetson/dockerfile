@@ -1,0 +1,26 @@
+# Jetson (AGX Orin / JetPack 7.x). The igpu image already has Python 3.12 and
+# an aarch64 Tegra torch, so upstream's miniconda + cu124 install are dropped.
+#
+# No TensorRT on purpose: the image's TRT 10.11 links libnvdla_compiler.so,
+# which JetPack 7 removed. Export ONNX here, build engines on the host.
+FROM nvcr.io/nvidia/pytorch:26.02-py3-igpu
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV OPENCV_IO_ENABLE_OPENEXR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ffmpeg libturbojpeg-dev libsm6 libxext6 libxkbcommon0 \
+        libx11-xcb1 libxcb-xinerama0 libxcb-icccm4 libxcb-render-util0 \
+        libxcb-shape0 libxcb-keysyms1 libxcb-image0 libxkbcommon-x11-0 \
+        libxcb-cursor0 libxcb-xkb1 && \
+    rm -rf /var/lib/apt/lists/*
+
+# requirements.txt minus numpy (pip would break the ABI match to torch) and
+# open3d (no aarch64 wheel; Utils.py guards it -- use --get_pc 0). The version
+# print fails the build here if pip swapped torch out.
+RUN pip install --no-cache-dir \
+        timm einops omegaconf scipy scikit-image \
+        opencv-contrib-python imageio pyyaml onnx && \
+    python -c "import torch,torchvision,numpy;print('torch',torch.__version__,'tv',torchvision.__version__,'np',numpy.__version__)"
+
+WORKDIR /workspace
